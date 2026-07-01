@@ -1,0 +1,21 @@
+python-dotenv>=1.0.0
+pillow>=10.4.0,<11
+requests>=2.31.0
+loguru>=0.7.0
+pyyaml>=6.0
+# google-genai is OPTIONAL: only needed if IMAGE_PROVIDER=gemini.
+# It conflicts with gradio-client on websockets (>=13 vs <13). Install separately:
+#   pip install --no-deps google-genai
+# google-genai>=0.3.0
+gradio>=4.44.0,<5
+pyinstaller>=6.0.0
+# Python 3.13+ removed stdlib audioop; pydub (Gradio) needs audioop-lts
+audioop-lts>=0.2.1
+huggingface_hub>=0.24.0,<0.26.0
+# Gradio 4.44 uses the old TemplateResponse signature; starlette 1.0 broke it.
+starlette>=0.37,<1.0
+fastapi>=0.110,<0.130
+openpyxl>=3.1.0
+xlrd>=2.0.1
+lxml>=4.9
+html5lib>=1.1

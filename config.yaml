@@ -1,0 +1,17 @@
+# Global defaults: only list keys you want to override; others use built-in defaults.
+# Final distribution per product (total 8):
+#   main=1 + scene=2 + multi=1 + size=1 + detail=1 + angle=1 + material=1 = 8
+# Built-in defaults already match the line above; leave image_counts empty unless
+# you want to override per-project. Example override:
+#   image_counts:
+#     scene: 4
+image_counts: {}
+
+generation:
+  size: 1600x1600
+  # Xais hard caps reference images at 8 per call. Send up to 8 so the model
+  # has all available angles (size/dimension labels, materials, packaging, etc.).
+  max_refs_per_call: 8
+  gemini_native_image_size: "2K"
+  concurrency: 5            # global in-process cap (1~8); shared across products in one run
+  retry_failed_rounds: 1    # after first pass, retry failed slots this many extra rounds

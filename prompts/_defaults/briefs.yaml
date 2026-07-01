@@ -1,0 +1,32 @@
+# One-line scene / angle hints per image index (English). Used when no per-product briefs.yaml.
+
+main:
+  - "Frontal hero shot, clean studio white, product centered, 75-85% frame"
+
+scene:
+  - "Indoor home / interior usage scene that fits the product category (e.g. living room, kitchen, bathroom, laundry room). Product clearly visible in context. Add a small unobtrusive product inset overlay only if the product is hard to identify from the scene alone — your judgment."
+  - "Outdoor / utility / garden / pool / patio context appropriate for the product. Product clearly visible in context. Add a small unobtrusive product inset overlay only if the product is hard to identify from the scene alone — your judgment."
+  - "Storage / portability / hands-on / packed-away context. Product clearly visible in context. Add a small unobtrusive product inset overlay only if the product is hard to identify from the scene alone — your judgment."
+  - "Hands-on usage scene with generic hands interacting with the product."
+  - "Pair / set / multiple units arranged in a plausible context."
+
+multi:
+  - "Background shows exactly 4 visually distinct real-world usage scenes for this product, chosen from settings that make sense for this product category (different locations, viewpoints, times of day, stages of use, or user contexts). The 4 scenes are blended with soft organic transitions (fades, depth-of-field, light beams, curved or diagonal boundaries) — NOT a 2x2 grid and NOT a hard collage. The product (or the device that uses it) appears appropriately in each sub-scene. A circular or oval product hero callout placed at the geometric center of the canvas, ~35-50% of canvas width, clean white-background studio hero shot of the product with a thin neutral border. No grid, no panels, no text."
+
+size:
+  - "Reproduce the exact dimension numbers from the references; each number appears EXACTLY ONCE and points at the correct part / axis (longest number on the longest side; feature-specific numbers on the same feature). When 3 dimensions are labeled (incl. thickness/height/depth), use three-quarter / isometric view so all three directions are legible. Primary orientation must flip vs the reference (horizontal ↔ vertical, flat ↔ upright). Background must be pure white #FFFFFF with NOTHING but the product + dimension lines + labels — no props, no rulers, no hands, no decorative elements. Fallback only if no numbers exist in any reference: a single thin dual-unit ruler is the ONLY allowed accessory."
+
+detail:
+  - "Close-up on the core functional feature (mechanism, closure, port, control); product still clearly recognizable, 50-70% of frame"
+  - "Close-up on edge / corner / joint / stitching showing build quality; product still clearly recognizable, 50-70% of frame"
+  - "Close-up on an accessory or included small parts arrangement; still recognizable as belonging to the product"
+  - "Close-up on interior / cross-section if reference shows it; product still clearly recognizable"
+
+angle:
+  - "45-degree three-quarter view, pure white background, premium catalog"
+  - "Top-down flat lay, pure white background"
+  - "Back or side profile, pure white background"
+
+material:
+  - "Close-up on the dominant material/surface (main body, mesh, fabric, frame); product still clearly recognizable, 50-70% of frame"
+  - "Close-up on a secondary material/accent area (gasket, hinge, stitched seam, plastic clip, rubber foot); product still clearly recognizable, 50-70% of frame"

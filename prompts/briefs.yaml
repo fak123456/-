@@ -1,0 +1,33 @@
+# One-line scene / angle hints per image index (English). Used when no per-product briefs.yaml.
+# Universal rules (canvas, identity, zero-defects, brand safety) live in global_rules.md.
+
+main:
+  - "Frontal hero shot, clean studio white, product centered, 75-85% of frame."
+
+scene:
+  - "Indoor home / interior scene fitting the product (living room, kitchen, bathroom, laundry). Product clearly visible; neutral unbranded props. Add a small unobtrusive corner inset only if the product is hard to identify from the scene alone."
+  - "Outdoor / utility / garden / pool / patio context. Product clearly visible. Add a small corner inset only if hard to identify from the scene alone."
+  - "Storage / portability / hands-on / packed-away context. Product clearly visible. Add a small corner inset only if hard to identify from the scene alone."
+  - "Hands-on usage scene with generic hands interacting with the product."
+  - "Pair / set / multiple units arranged in a plausible context."
+
+multi:
+  - "2x2 four-panel grid, edge to edge; each panel = one distinct usage scene with this product clearly visible. NO center circle / hero / fifth product — 4 panels, 4 product instances max. No text."
+
+size:
+  - "Pure white #FFFFFF; full product silhouette visible. Copy ONLY overall outer dimensions from references (max 3: length/width/height; flat/simple: 2 or 1). Each number once, correct edge. Labels = digits + unit, keeping the reference's units (both cm/inch like 25cm/9.84in, or cm only — both fine). NO English/Chinese dimension words. NO rulers/tapes/coins/hands/scale props. NO invented numbers; if references have none, show product only with no dimension lines. Flip orientation vs the reference diagram."
+
+detail:
+  - "Close-up on the core functional feature (mechanism, closure, port, control); product still recognizable, 50-70% of frame."
+  - "Close-up on edge / corner / joint / stitching showing build quality; product still recognizable, 50-70% of frame."
+  - "Close-up on an accessory or included small parts; still recognizable as belonging to the product."
+  - "Close-up on interior / cross-section if a reference shows it; product still recognizable."
+
+angle:
+  - "45-degree three-quarter view, pure white background, premium catalog."
+  - "Top-down flat lay, pure white background."
+  - "Back or side profile, pure white background."
+
+material:
+  - "Close-up on the dominant material/surface (main body, mesh, fabric, frame); product still recognizable, 50-70% of frame."
+  - "Close-up on a secondary material/accent (gasket, hinge, stitched seam, plastic clip, rubber foot); product still recognizable, 50-70% of frame."
