@@ -25,7 +25,9 @@ class Settings:
     prompts_dir: Path = PROJECT_ROOT / "prompts"
     gemini_model_id: str = "gemini-2.5-flash-image"
     openai_model_id: str = "gpt-image-1"
-    doubao_model_id: str = ""
+    doubao_model_id: str = "doubao-seedream-5-0-260128"
+    doubao_api_base: str = "https://ark.cn-beijing.volces.com/api/v3"
+    doubao_timeout: int = 300
     xais_model_id: str = "Nano_Banana_Pro_2K_0"
     xais_api_base: str = "https://sg2.dchai.cn"
     xais_timeout: int = 300
@@ -58,7 +60,9 @@ def load_settings() -> Settings:
         prompts_dir=PROJECT_ROOT / "prompts",
         gemini_model_id=os.getenv("GEMINI_MODEL_ID", "gemini-2.5-flash-image").strip(),
         openai_model_id=os.getenv("OPENAI_MODEL_ID", "gpt-image-1").strip(),
-        doubao_model_id=os.getenv("DOUBAO_MODEL_ID", "").strip(),
+        doubao_model_id=os.getenv("DOUBAO_MODEL_ID", "doubao-seedream-5-0-260128").strip(),
+        doubao_api_base=os.getenv("DOUBAO_API_BASE", "https://ark.cn-beijing.volces.com/api/v3").strip(),
+        doubao_timeout=int(os.getenv("DOUBAO_TIMEOUT", "300")),
         xais_model_id=os.getenv("XAIS_MODEL_ID", "Nano_Banana_Pro_2K_0").strip(),
         xais_api_base=os.getenv("XAIS_API_BASE", "https://sg2.dchai.cn").strip(),
         xais_timeout=int(os.getenv("XAIS_TIMEOUT", "300")),

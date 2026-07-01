@@ -64,17 +64,41 @@ from gui.runner import (
 from src.config import PROJECT_ROOT  # noqa: F401  (kept for backwards-compat imports)
 from src.counts_config import ALLOWED_TYPES, DEFAULT_COUNTS, TYPE_ORDER
 from src.image_io import collect_reference_paths, list_ref_paths
+from src.size_ref import (
+    ensure_auto_size_ref,
+    list_size_ref_candidates,
+    save_selected_size_ref,
+    score_size_ref,
+)
 
 TITLE_FILE = "商品标题.txt"
 SLOT_COUNT = 20
 SLOT_COLS = 4
 SLOT_ROWS = SLOT_COUNT // SLOT_COLS
 SLOT_WIDGETS = 6  # cap, im, combined_cg, note, prompt, col (outer Column visibility)
-_OUT_PNG_RE = re.compile(r"^(main|scene|multi|size|detail|angle|material)_\d{2,}\.png$", re.I)
+_OUT_IMG_RE = re.compile(r"^(main|scene|multi|size|detail|angle|material)_\d{2,}\.(?:png|jpe?g)$", re.I)
+_NEW_OUTPUT_EXT = ".jpg"
 _REFS_PREFIX = "refs/"
 _OUT_PREFIX = "output/"
 RECENT_LOG_MAX = 120
 STUCK_WARN_SEC = 600.0  # ~10 min without any event => surface a stuck-warning
+
+
+def _output_filename(type_name: str, idx: int, ext: str = _NEW_OUTPUT_EXT) -> str:
+    return f"{type_name}_{idx:02d}{ext}"
+
+
+def _output_path_for_slot(out_dir: Path, type_name: str, idx: int) -> Path:
+    jpg = out_dir / _output_filename(type_name, idx, ".jpg")
+    if jpg.is_file():
+        return jpg
+    jpeg = out_dir / _output_filename(type_name, idx, ".jpeg")
+    if jpeg.is_file():
+        return jpeg
+    png = out_dir / _output_filename(type_name, idx, ".png")
+    if png.is_file():
+        return png
+    return jpg
 
 
 def _attach_log_sink(q: "queue.Queue") -> int | None:
@@ -334,7 +358,7 @@ def _combined_ref_choices(
     """Return ``(choices, default_value)`` for the per-slot combined picker.
 
     - ``choices`` lists every selectable image: ``refs/<name>`` first, then
-      ``output/<name>`` for each existing generated PNG (excluding the slot's
+      ``output/<name>`` for each existing generated image (excluding the slot's
       own file if ``exclude_output_name`` is given).
     - ``default_value`` checks all ``refs/*`` entries and none of the outputs,
       matching the previous default behaviour where refs were used unless the
@@ -349,7 +373,7 @@ def _combined_ref_choices(
     out_dir = product_dir / "output"
     if out_dir.is_dir():
         for p in sorted(out_dir.iterdir(), key=lambda x: x.name.casefold()):
-            if not p.is_file() or not _OUT_PNG_RE.match(p.name):
+            if not p.is_file() or not _OUT_IMG_RE.match(p.name):
                 continue
             if exclude_output_name and p.name == exclude_output_name:
                 continue
@@ -358,7 +382,7 @@ def _combined_ref_choices(
 
 
 def _preview_gallery_items(product_dir: Path) -> list[tuple[str, str]]:
-    """Items for the shared preview gallery: refs first, then output PNGs.
+    """Items for the shared preview gallery: refs first, then output images.
 
     Each item is ``(filepath, caption)`` where caption is the filename so the
     user can match the label against the per-slot checkbox names.
@@ -372,14 +396,14 @@ def _preview_gallery_items(product_dir: Path) -> list[tuple[str, str]]:
         for p in sorted(out_dir.iterdir(), key=lambda x: x.name.casefold()):
             if not p.is_file():
                 continue
-            if not _OUT_PNG_RE.match(p.name):
+            if not _OUT_IMG_RE.match(p.name):
                 continue
             items.append((str(p.resolve()), f"output/{p.name}"))
     return items
 
 
 def _ordered_slot_keys(product_dir: Path) -> list[tuple[str, int, Path | None]]:
-    """Union of meta.json entries and disk PNGs, ordered by TYPE_ORDER then index.
+    """Union of meta.json entries and disk output images, ordered by TYPE_ORDER then index.
 
     Each entry: ``(type_name, index, on_disk_path_or_None)``. Used as the source
     of truth for the 20-slot grid both at runtime (during a generation) and after
@@ -402,14 +426,14 @@ def _ordered_slot_keys(product_dir: Path) -> list[tuple[str, int, Path | None]]:
         key = (t, idx)
         if key not in by_key:
             order.append(key)
-        p = out_dir / f"{t}_{idx:02d}.png"
+        p = _output_path_for_slot(out_dir, t, idx)
         by_key[key] = p if p.is_file() else None
 
     if out_dir.is_dir():
         for p in out_dir.iterdir():
             if not p.is_file():
                 continue
-            m = _OUT_PNG_RE.match(p.name)
+            m = _OUT_IMG_RE.match(p.name)
             if not m:
                 continue
             t = m.group(1).lower()
@@ -447,7 +471,7 @@ def _slot_state_and_updates_full(
     """20-slot state + SLOT_COUNT * SLOT_WIDGETS gr.update values.
 
     Drives the slot grid from the merge of meta.json and disk so that
-    progressive yields during a run show new PNGs immediately while still
+    progressive yields during a run show new images immediately while still
     keeping placeholders visible for slots whose image was just deleted.
 
     When ``schedule`` is given, it overrides the meta+disk ordering and is
@@ -457,7 +481,7 @@ def _slot_state_and_updates_full(
     if schedule:
         out_dir = product_dir / "output"
         pairs = [
-            (t, i, (out_dir / f"{t}_{i:02d}.png") if (out_dir / f"{t}_{i:02d}.png").is_file() else None)
+            (t, i, _output_path_for_slot(out_dir, t, i) if _output_path_for_slot(out_dir, t, i).is_file() else None)
             for (t, i) in schedule
         ]
     else:
@@ -471,7 +495,7 @@ def _slot_state_and_updates_full(
             state[i] = [t, idx]
             ok_path = str(disk_p.resolve()) if disk_p is not None and disk_p.is_file() else None
             cap = _cap_for_slot(t, idx, disk_p, marker)
-            excl = f"{t}_{idx:02d}.png"
+            excl = _output_filename(t, idx)
             choices, default_val = _combined_ref_choices(product_dir, excl)
             updates.extend(
                 [
@@ -897,6 +921,74 @@ def _parse_batch_df(df: Any) -> list[tuple[str, str]]:
     return rows
 
 
+def _candidate_label(path: Path, score: float, reason: str) -> str:
+    return f"{path.name}  | score={score:g}  | {reason}"
+
+
+def _candidate_from_label(product_dir: Path, label: str) -> Path | None:
+    name = str(label or "").split("|", 1)[0].strip()
+    if not name:
+        return None
+    for p in collect_reference_paths(product_dir):
+        if p.name == name:
+            return p
+    return None
+
+
+def _size_review_rows(product_dirs: list[Path]) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for pdir in product_dirs:
+        picked = ensure_auto_size_ref(pdir)
+        if picked is None:
+            rows.append([pdir.name, "", "未找到可用图片"])
+            continue
+        source = "auto"
+        try:
+            from src.size_ref import load_selected_size_ref
+
+            rec = load_selected_size_ref(pdir) or {}
+            source = str(rec.get("source") or "auto")
+        except Exception:
+            pass
+        rows.append([pdir.name, str(picked.path.resolve()), f"{picked.path.name} ({source}, score={picked.score:g})"])
+    return rows
+
+
+def _review_product_dirs_from_tasklist(
+    root_str: str,
+    output_dest_str: str,
+    tasklist_path_str: str,
+    default_root: str,
+) -> list[Path]:
+    path = Path((tasklist_path_str or "").strip()).expanduser()
+    if not path.is_file():
+        return []
+    try:
+        rows = load_tasklist(path)
+        root_path = _effective_output_root(root_str, output_dest_str, default_root)
+    except Exception:
+        return []
+    out: list[Path] = []
+    seen: set[str] = set()
+    for r in rows:
+        raw = Path(str(r.path or "")).expanduser()
+        pdir: Path | None = None
+        if raw.is_dir():
+            pdir = raw.resolve()
+        elif raw.is_file() and raw.suffix.lower() == ".zip":
+            name = (r.title or raw.stem).strip() or raw.stem
+            pdir = (root_path / name).resolve()
+            if not pdir.is_dir():
+                continue
+        if pdir is None or not pdir.is_dir():
+            continue
+        key = str(pdir)
+        if key not in seen:
+            out.append(pdir)
+            seen.add(key)
+    return out
+
+
 def _build_custom_ref_paths(
     product_dir: Path,
     slot_type: str,
@@ -906,19 +998,23 @@ def _build_custom_ref_paths(
     """Resolve combined CheckboxGroup picks into absolute file paths.
 
     Choices are formatted as ``refs/<name>`` or ``output/<name>``; the slot's
-    own output PNG is always skipped to avoid self-referencing.
+    own output image is always skipped to avoid self-referencing.
     """
     paths: list[Path] = []
     refs_dir = product_dir / "refs"
     out_dir = product_dir / "output"
-    self_png = f"{slot_type}_{slot_idx:02d}.png"
+    self_names = {
+        _output_filename(slot_type, slot_idx, ".jpg"),
+        _output_filename(slot_type, slot_idx, ".jpeg"),
+        _output_filename(slot_type, slot_idx, ".png"),
+    }
     for raw in selected or []:
         s = str(raw) if raw is not None else ""
         if s.startswith(_REFS_PREFIX):
             p = refs_dir / s[len(_REFS_PREFIX):]
         elif s.startswith(_OUT_PREFIX):
             name = s[len(_OUT_PREFIX):]
-            if name == self_png:
+            if name in self_names:
                 continue
             p = out_dir / name
         else:
@@ -1324,7 +1420,7 @@ def build_generate_tab() -> GenerateTabResult:
             return
 
         settings = effective_settings()
-        if settings.image_provider in ("xais", "shiyun", "gemini") and not (settings.image_api_key or "").strip():
+        if settings.image_provider in ("xais", "shiyun", "gemini", "doubao") and not (settings.image_api_key or "").strip():
             yield [], "请先在「设置」中填写 API Key（IMAGE_API_KEY）。", "", [], empty_state, *empty_slots
             return
 
@@ -1739,7 +1835,7 @@ def build_generate_tab() -> GenerateTabResult:
 
         # ---- Validate settings + root path --------------------------------
         settings = effective_settings()
-        if settings.image_provider in ("xais", "shiyun", "gemini") and not (settings.image_api_key or "").strip():
+        if settings.image_provider in ("xais", "shiyun", "gemini", "doubao") and not (settings.image_api_key or "").strip():
             yield _y(
                 log_text="请先在「设置」中填写 API Key。",
                 df_rows=gr.update(value=_capped_tasklist_df(task_rows)),
@@ -1966,7 +2062,7 @@ def build_generate_tab() -> GenerateTabResult:
 
                 imgs = gallery_images_from_meta(product_dir)
                 all_imgs.extend(imgs[:3])
-                if (product_dir / "output").is_dir() and any((product_dir / "output").glob("*.png")):
+                if (product_dir / "output").is_dir() and gallery_images_from_meta(product_dir):
                     last_loaded = product_dir
                 return was_cancelled_now
 
@@ -2279,7 +2375,7 @@ def build_generate_tab() -> GenerateTabResult:
 
         # ---- Validate settings ---------------------------------------------
         settings = effective_settings()
-        if settings.image_provider in ("xais", "shiyun", "gemini") and not (settings.image_api_key or "").strip():
+        if settings.image_provider in ("xais", "shiyun", "gemini", "doubao") and not (settings.image_api_key or "").strip():
             yield _y(
                 log_text="请先在「设置」中填写 API Key。",
                 failure_df_rows=gr.update(value=_capped_failure_df(failure_rows)),
@@ -2531,7 +2627,7 @@ def build_generate_tab() -> GenerateTabResult:
 
                 imgs = gallery_images_from_meta(product_dir)
                 all_imgs.extend(imgs[:3])
-                if (product_dir / "output").is_dir() and any((product_dir / "output").glob("*.png")):
+                if (product_dir / "output").is_dir() and gallery_images_from_meta(product_dir):
                     last_loaded = product_dir
                 logs.append(
                     f"{'✅' if n_still == 0 else '⚠️ '} [{gi}/{n_groups}] "
@@ -2808,6 +2904,26 @@ def build_generate_tab() -> GenerateTabResult:
                 autoscroll=True,
             )
 
+    gr.Markdown("### 尺寸图审核（生成 size 图前确认使用哪一张参考图）")
+    with gr.Row():
+        size_review_btn = gr.Button("识别/刷新尺寸图", size="sm")
+        size_save_btn = gr.Button("保存重选尺寸图", variant="primary", size="sm")
+    size_review_msg = gr.Markdown("")
+    size_review_df = gr.Dataframe(
+        headers=["商品编号", "图片展示", "重选尺寸图"],
+        datatype=["str", "str", "str"],
+        row_count=(6, "dynamic"),
+        col_count=(3, "fixed"),
+        type="array",
+        label="尺寸图审核表",
+        wrap=True,
+        interactive=False,
+    )
+    with gr.Row():
+        size_product_dd = gr.Dropdown(label="审核商品", choices=[], allow_custom_value=True, scale=2)
+        size_candidate_dd = gr.Dropdown(label="重选尺寸图", choices=[], allow_custom_value=True, scale=4)
+    size_preview_img = gr.Image(label="当前尺寸图预览", type="filepath", height=260)
+
     # ---- Full-width batch outputs (gallery + failure log) ------------------
     # These were inside the right-hand batch column before, but at scale=1
     # they only used half the page width. Pulling them out to the page level
@@ -3011,16 +3127,148 @@ def build_generate_tab() -> GenerateTabResult:
     stop_single_btn.click(_on_stop_click, None, [stop_single_msg], show_progress="hidden")
     stop_batch_btn.click(_on_stop_click, None, [stop_batch_msg], show_progress="hidden")
 
+    def _size_review_product_dirs(
+        root_str: str,
+        output_dest_str: str,
+        product_name: str | None,
+        tasklist_path_str: str,
+    ) -> list[Path]:
+        dirs: list[Path] = []
+        selected = _resolve_product_dir(root_str or default_root, output_dest_str, product_name)
+        if selected is not None:
+            dirs.append(selected)
+        for p in _review_product_dirs_from_tasklist(root_str or default_root, output_dest_str, tasklist_path_str, default_root):
+            if all(str(p.resolve()) != str(x.resolve()) for x in dirs):
+                dirs.append(p)
+        if not dirs:
+            try:
+                dirs = _discover_products_across(root_str or default_root, output_dest_str)
+            except Exception:
+                dirs = []
+        return dirs
+
+    def _refresh_size_review(
+        root_str: str,
+        output_dest_str: str,
+        product_name: str | None,
+        tasklist_path_str: str,
+    ):
+        dirs = _size_review_product_dirs(root_str, output_dest_str, product_name, tasklist_path_str)
+        rows = _size_review_rows(dirs)
+        names = [p.name for p in dirs]
+        value = product_name if product_name in names else (names[0] if names else None)
+        msg = f"已识别 {len(rows)} 个商品的尺寸图候选。" if rows else "未找到可审核的商品。"
+        cand_choices, cand_value, preview = _size_candidates_for_product(root_str, output_dest_str, value)
+        return (
+            gr.update(value=rows),
+            gr.update(choices=names, value=value),
+            gr.update(choices=cand_choices, value=cand_value),
+            preview,
+            msg,
+        )
+
+    def _size_candidates_for_product(
+        root_str: str,
+        output_dest_str: str,
+        product_name: str | None,
+    ):
+        pdir = _resolve_product_dir(root_str or default_root, output_dest_str, product_name)
+        if pdir is None:
+            return [], None, None
+        candidates = list_size_ref_candidates(pdir)
+        picked = ensure_auto_size_ref(pdir)
+        labels = [_candidate_label(c.path, c.score, c.reason) for c in candidates]
+        value = None
+        if picked is not None:
+            for lab in labels:
+                if lab.split("|", 1)[0].strip() == picked.path.name:
+                    value = lab
+                    break
+        return labels, value, str(picked.path.resolve()) if picked else None
+
+    def _on_size_product_change(root_str: str, output_dest_str: str, product_name: str | None):
+        choices, value, preview = _size_candidates_for_product(root_str, output_dest_str, product_name)
+        return gr.update(choices=choices, value=value), preview
+
+    def _preview_size_candidate(
+        root_str: str,
+        output_dest_str: str,
+        product_name: str | None,
+        label: str,
+    ) -> str | None:
+        pdir = _resolve_product_dir(root_str or default_root, output_dest_str, product_name)
+        if pdir is None:
+            return None
+        path = _candidate_from_label(pdir, label)
+        return str(path.resolve()) if path is not None else None
+
+    def _save_size_choice(
+        root_str: str,
+        output_dest_str: str,
+        product_name: str | None,
+        selected_label: str,
+        tasklist_path_str: str,
+    ):
+        pdir = _resolve_product_dir(root_str or default_root, output_dest_str, product_name)
+        if pdir is None:
+            return gr.update(), None, "请选择有效商品后再保存。"
+        path = _candidate_from_label(pdir, selected_label)
+        if path is None:
+            return gr.update(), None, "请选择一张有效的尺寸图候选。"
+        cand = score_size_ref(path)
+        score = float(cand.score)
+        reason = str(cand.reason)
+        save_selected_size_ref(pdir, path, source="manual", score=score, reason=reason)
+        rows = _size_review_rows(_size_review_product_dirs(root_str, output_dest_str, product_name, tasklist_path_str))
+        return gr.update(value=rows), str(path.resolve()), f"已保存 {pdir.name} 的尺寸图：{path.name}"
+
     refresh_btn.click(
         refresh_products,
         [root_in, output_dest_in],
         [product_dd, status_refresh],
+    )
+    refresh_btn.click(
+        _refresh_size_review,
+        [root_in, output_dest_in, product_dd, tasklist_path_in],
+        [size_review_df, size_product_dd, size_candidate_dd, size_preview_img, size_review_msg],
+        show_progress="hidden",
     )
 
     product_dd.change(
         on_product_change,
         [root_in, output_dest_in, product_dd],
         [title_in, gallery, preview_gallery, slot_state, *slot_flat_outputs],
+        show_progress="hidden",
+    )
+    product_dd.change(
+        _refresh_size_review,
+        [root_in, output_dest_in, product_dd, tasklist_path_in],
+        [size_review_df, size_product_dd, size_candidate_dd, size_preview_img, size_review_msg],
+        show_progress="hidden",
+    )
+
+    size_review_btn.click(
+        _refresh_size_review,
+        [root_in, output_dest_in, product_dd, tasklist_path_in],
+        [size_review_df, size_product_dd, size_candidate_dd, size_preview_img, size_review_msg],
+        show_progress="hidden",
+    )
+    size_product_dd.change(
+        _on_size_product_change,
+        [root_in, output_dest_in, size_product_dd],
+        [size_candidate_dd, size_preview_img],
+        show_progress="hidden",
+    )
+    size_candidate_dd.change(
+        _preview_size_candidate,
+        [root_in, output_dest_in, size_product_dd, size_candidate_dd],
+        [size_preview_img],
+        show_progress="hidden",
+    )
+    size_save_btn.click(
+        _save_size_choice,
+        [root_in, output_dest_in, size_product_dd, size_candidate_dd, tasklist_path_in],
+        [size_review_df, size_preview_img, size_review_msg],
         show_progress="hidden",
     )
 
@@ -3161,6 +3409,12 @@ def build_generate_tab() -> GenerateTabResult:
     )
     tasklist_refresh_btn.click(
         _refresh_tasklist, [tasklist_path_in], [batch_df, tasklist_summary], show_progress="hidden"
+    )
+    tasklist_refresh_btn.click(
+        _refresh_size_review,
+        [root_in, output_dest_in, product_dd, tasklist_path_in],
+        [size_review_df, size_product_dd, size_candidate_dd, size_preview_img, size_review_msg],
+        show_progress="hidden",
     )
     tasklist_reset_btn.click(
         _reset_tasklist, [tasklist_path_in], [batch_df, tasklist_summary], show_progress="hidden"
@@ -3320,7 +3574,7 @@ def build_generate_tab() -> GenerateTabResult:
         t, idx = str(pair[0]), int(pair[1])
         regen_s = f"{t}_{idx:02d}"
         settings = effective_settings()
-        if settings.image_provider in ("xais", "shiyun", "gemini") and not (settings.image_api_key or "").strip():
+        if settings.image_provider in ("xais", "shiyun", "gemini", "doubao") and not (settings.image_api_key or "").strip():
             yield [], "请先在「设置」中填写 API Key。", "", [], empty_state, *empty_slots
             return
 
@@ -3330,6 +3584,9 @@ def build_generate_tab() -> GenerateTabResult:
             idx,
             combined_selected,
         )
+        if t == "size":
+            picked = ensure_auto_size_ref(product_dir)
+            custom_paths = [picked.path] if picked is not None else custom_paths
         if not custom_paths:
             yield [], "请至少勾选一张参考图（refs/ 或本次输出图）。", "", _preview_gallery_items(product_dir), empty_state, *empty_slots
             return
@@ -3549,16 +3806,18 @@ def build_generate_tab() -> GenerateTabResult:
         empty_st = [None] * SLOT_COUNT
         empty_sl = _empty_slot_updates_full()
         if not root.is_dir():
-            return dd_upd, st, "", [], [], empty_st, *empty_sl
+            return dd_upd, st, "", [], [], gr.update(value=[]), gr.update(choices=[], value=None), gr.update(choices=[], value=None), None, "", empty_st, *empty_sl
         prods = discover_under_root(root)
         if not prods:
-            return dd_upd, st, "", [], [], empty_st, *empty_sl
+            return dd_upd, st, "", [], [], gr.update(value=[]), gr.update(choices=[], value=None), gr.update(choices=[], value=None), None, "", empty_st, *empty_sl
         p0 = prods[0]
         title = _read_title_file(p0)
         gal = gallery_images_from_meta(p0)
         preview = _preview_gallery_items(p0)
         st0, upd = _slot_state_and_updates_full(p0)
-        return dd_upd, st, title, gal, preview, st0, *upd
+        rows = _size_review_rows([p0])
+        choices, value, size_preview = _size_candidates_for_product(str(root), "", p0.name)
+        return dd_upd, st, title, gal, preview, gr.update(value=rows), gr.update(choices=[p0.name], value=p0.name), gr.update(choices=choices, value=value), size_preview, "已识别 1 个商品的尺寸图候选。", st0, *upd
 
     initial_load_outputs = [
         product_dd,
@@ -3566,6 +3825,11 @@ def build_generate_tab() -> GenerateTabResult:
         title_in,
         gallery,
         preview_gallery,
+        size_review_df,
+        size_product_dd,
+        size_candidate_dd,
+        size_preview_img,
+        size_review_msg,
         slot_state,
         *slot_flat_outputs,
     ]

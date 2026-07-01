@@ -13,12 +13,13 @@ from pathlib import Path
 from src.briefs import BriefResolution, resolve_briefs
 from src.config import Settings
 from src.counts_config import TYPE_ORDER, ResolvedCounts
-from src.image_io import collect_reference_paths, list_ref_paths, read_image_bytes, save_png
+from src.image_io import collect_reference_paths, list_ref_paths, read_image_bytes, save_jpg
 from src.prompts import BuiltPrompt, build_prompt
 from src.providers.base import ImageProvider
 from src.providers.brief_base import BriefGenerator
 from src.providers.placeholder import make_failure_placeholder_png
 from src.refs_layout import ensure_refs_folder
+from src.size_ref import ensure_auto_size_ref
 from src.utils.logger import get_logger
 from src.utils.retry import retry_with_backoff
 
@@ -27,7 +28,8 @@ logger = get_logger()
 TITLE_FILE = "商品标题.txt"
 
 
-_OUTPUT_NAME_RE = re.compile(r"^(main|scene|multi|size|detail|angle|material)_\d{2,}\.png$")
+OUTPUT_EXT = ".jpg"
+_OUTPUT_NAME_RE = re.compile(r"^(main|scene|multi|size|detail|angle|material)_\d{2,}\.(?:png|jpg|jpeg)$")
 
 
 @dataclass
@@ -42,6 +44,8 @@ class SlotTask:
     user_note_for_prompt: str | None
     built: BuiltPrompt
     out_path: Path
+    ref_paths_send: list[Path]
+    ref_bytes_ordered: list[bytes]
 
 
 @dataclass
@@ -56,6 +60,8 @@ class ProductRunContext:
     resolved: ResolvedCounts
     ref_paths_send: list[Path]
     ref_bytes_ordered: list[bytes]
+    type_ref_paths_send: dict[str, list[Path]]
+    type_ref_bytes_ordered: dict[str, list[bytes]]
     out_size: str
     output_dir: Path
     regen_targets: set[tuple[str, int]] | None = None
@@ -67,7 +73,7 @@ def _clean_stale_outputs(
     types_to_clean: set[str] | None = None,
     exact_files: set[str] | None = None,
 ) -> None:
-    """Remove previously generated type_NN.png from output_dir."""
+    """Remove previously generated type_NN image files from output_dir."""
     if not output_dir.is_dir():
         return
     for p in output_dir.iterdir():
@@ -77,7 +83,7 @@ def _clean_stale_outputs(
         if not m:
             continue
         if exact_files is not None:
-            if p.name not in exact_files:
+            if p.name not in exact_files and p.with_suffix(OUTPUT_EXT).name not in exact_files:
                 continue
         elif types_to_clean is not None and m.group(1) not in types_to_clean:
             continue
@@ -105,7 +111,7 @@ def _entry_template(
         "index": task.idx,
         "type_total": task.type_total,
         "output_path": str(task.out_path.resolve()),
-        "ref_paths_sent": [str(p.resolve()) for p in ctx.ref_paths_send],
+        "ref_paths_sent": [str(p.resolve()) for p in task.ref_paths_send],
         "user_brief": task.user_brief,
         "brief_source": task.brief_src,
         "user_note": (task.user_note_for_prompt or "").strip() or None,
@@ -131,20 +137,20 @@ def run_one_slot(
             with request_sem:
                 return ctx.provider.generate(
                     prompt=task.built.full,
-                    reference_images=ctx.ref_bytes_ordered,
+                    reference_images=task.ref_bytes_ordered,
                     size=ctx.out_size,
                     api_image_size=ctx.resolved.generation.gemini_native_image_size,
                 )
         return ctx.provider.generate(
             prompt=task.built.full,
-            reference_images=ctx.ref_bytes_ordered,
+            reference_images=task.ref_bytes_ordered,
             size=ctx.out_size,
             api_image_size=ctx.resolved.generation.gemini_native_image_size,
         )
 
     try:
         image_bytes = _generate()
-        save_png(image_bytes, task.out_path, ctx.out_size)
+        save_jpg(image_bytes, task.out_path, ctx.out_size)
         entry["status"] = "ok"
     except Exception as e:
         logger.exception(f"{task.type_name} #{task.idx} failed for {ctx.product_name}")
@@ -159,7 +165,7 @@ def run_one_slot(
                 prompt_excerpt=task.built.full[:200],
                 size=ctx.out_size,
             )
-            save_png(ph_bytes, task.out_path, ctx.out_size)
+            save_jpg(ph_bytes, task.out_path, ctx.out_size)
             entry["is_placeholder"] = True
         except Exception:
             logger.warning(
@@ -290,7 +296,9 @@ def prepare_slot_tasks(
                 ctx.settings,
                 user_note=user_note_for_prompt,
             )
-            out_path = ctx.output_dir / f"{type_name}_{idx:02d}.png"
+            out_path = ctx.output_dir / f"{type_name}_{idx:02d}{OUTPUT_EXT}"
+            ref_paths_send = ctx.type_ref_paths_send.get(type_name, ctx.ref_paths_send)
+            ref_bytes_ordered = ctx.type_ref_bytes_ordered.get(type_name, ctx.ref_bytes_ordered)
             tasks.append(
                 SlotTask(
                     type_name=type_name,
@@ -301,6 +309,8 @@ def prepare_slot_tasks(
                     user_note_for_prompt=user_note_for_prompt,
                     built=built,
                     out_path=out_path,
+                    ref_paths_send=ref_paths_send,
+                    ref_bytes_ordered=ref_bytes_ordered,
                 )
             )
     if dry_run:
@@ -340,6 +350,7 @@ def build_product_run_context(
     *,
     regen_targets: set[tuple[str, int]] | None = None,
     custom_ref_paths: list[Path] | None = None,
+    type_ref_paths: dict[str, list[Path]] | None = None,
     dry_run: bool = False,
 ) -> ProductRunContext:
     """Load refs and prepare output dir for a product run."""
@@ -370,6 +381,21 @@ def build_product_run_context(
         refs_dir = product_dir / "refs"
         ref_paths = list_ref_paths(refs_dir)
 
+    type_ref_paths_resolved: dict[str, list[Path]] = {}
+    if type_ref_paths:
+        for type_name, paths in type_ref_paths.items():
+            clean: list[Path] = []
+            for p in paths:
+                rp = Path(p).expanduser().resolve()
+                if rp.is_file():
+                    clean.append(rp)
+            if clean:
+                type_ref_paths_resolved[type_name] = clean
+    elif not dry_run and custom_ref_paths is None and int(resolved.image_counts.get("size", 0)) > 0:
+        picked = ensure_auto_size_ref(product_dir)
+        if picked is not None and picked.path.is_file():
+            type_ref_paths_resolved["size"] = [picked.path.expanduser().resolve()]
+
     if not ref_paths:
         raise ValueError(f"No reference images in {product_dir} (refs/ or root)")
 
@@ -380,14 +406,25 @@ def build_product_run_context(
     if not dry_run:
         for p in ref_paths:
             path_to_bytes[p] = read_image_bytes(p)
+        for paths in type_ref_paths_resolved.values():
+            for p in paths:
+                if p not in path_to_bytes:
+                    path_to_bytes[p] = read_image_bytes(p)
         ref_bytes_ordered = [path_to_bytes[p] for p in ref_paths_send]
+    type_ref_paths_send: dict[str, list[Path]] = {}
+    type_ref_bytes_ordered: dict[str, list[bytes]] = {}
+    for type_name, paths in type_ref_paths_resolved.items():
+        limited = paths[:max_refs]
+        type_ref_paths_send[type_name] = limited
+        if not dry_run:
+            type_ref_bytes_ordered[type_name] = [path_to_bytes[p] for p in limited]
 
     output_dir = product_dir / "output"
     types_to_run = {t for t in TYPE_ORDER if int(resolved.image_counts.get(t, 0)) > 0}
     if not dry_run:
         output_dir.mkdir(parents=True, exist_ok=True)
         if regen_targets is not None:
-            exact_files = {f"{t}_{i:02d}.png" for (t, i) in regen_targets}
+            exact_files = {f"{t}_{i:02d}{OUTPUT_EXT}" for (t, i) in regen_targets}
             _clean_stale_outputs(output_dir, exact_files=exact_files)
         else:
             _clean_stale_outputs(output_dir, types_to_clean=types_to_run)
@@ -402,6 +439,8 @@ def build_product_run_context(
         resolved=resolved,
         ref_paths_send=ref_paths_send,
         ref_bytes_ordered=ref_bytes_ordered,
+        type_ref_paths_send=type_ref_paths_send,
+        type_ref_bytes_ordered=type_ref_bytes_ordered,
         out_size=resolved.generation.size,
         output_dir=output_dir,
         regen_targets=regen_targets,
@@ -420,6 +459,7 @@ def process_product(
     user_note: str | None = None,
     progress_callback: Callable[[str, int, int], None] | None = None,
     custom_ref_paths: list[Path] | None = None,
+    type_ref_paths: dict[str, list[Path]] | None = None,
     custom_prompt: str | None = None,
     cancel_event: threading.Event | None = None,
     request_sem: threading.Semaphore | None = None,
@@ -427,7 +467,7 @@ def process_product(
     """
     Generate images per resolved.image_counts.
 
-    Writes output/{type}_{NN}.png and output/meta.json unless dry_run.
+    Writes output/{type}_{NN}.jpg and output/meta.json unless dry_run.
     """
     cp_strip = (custom_prompt or "").strip()
     if cp_strip and regen_targets is not None and len(regen_targets) != 1:
@@ -440,6 +480,7 @@ def process_product(
         resolved,
         regen_targets=regen_targets,
         custom_ref_paths=custom_ref_paths,
+        type_ref_paths=type_ref_paths,
         dry_run=dry_run,
     )
     product_name = ctx.product_name

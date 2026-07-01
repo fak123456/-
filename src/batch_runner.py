@@ -39,6 +39,7 @@ class BatchProductSpec:
     counts_str: str | None = None
     config_path: Path | None = None
     custom_ref_paths: list[Path] | None = None
+    type_ref_paths: dict[str, list[Path]] | None = None
     custom_prompt: str | None = None
     job_label: str = ""
 
@@ -87,6 +88,7 @@ def _prepare_product_jobs(
             resolved,
             regen_targets=spec.regen_targets,
             custom_ref_paths=spec.custom_ref_paths,
+            type_ref_paths=spec.type_ref_paths,
         )
 
         if spec.custom_ref_paths is not None:

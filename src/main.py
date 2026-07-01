@@ -115,7 +115,8 @@ def get_provider(settings: Settings) -> ImageProvider:
         return DoubaoImageProvider(
             api_key=settings.image_api_key,
             model_id=settings.doubao_model_id,
-            api_base=settings.image_api_base,
+            api_base=settings.doubao_api_base,
+            timeout=settings.doubao_timeout,
         )
     if name == "gemini":
         return GeminiImageProvider(

@@ -8,7 +8,7 @@
 
 - `商品标题.txt` — 标题原文（任意欧洲语言 UTF-8，不翻译，直接写入英文 prompt）
 - 参考图：优先放在 `refs/`；若在根目录，首次运行会自动移入 `refs/`
-- 生成结果：`output/main_01.png`、`scene_01.png` … 与 `output/meta.json`
+- 生成结果：`output/main_01.jpg`、`scene_01.jpg` … 与 `output/meta.json`（旧 PNG 结果仍可预览）
 
 可选覆盖：
 
@@ -94,7 +94,7 @@ python -m venv .venv-build
 python -m src.main --product 商品1 --provider gemini --counts main=1,scene=0,multi=0,size=0,detail=0
 ```
 
-`openai` / `doubao` 的 **图像** 接口仍为 stub，需自行在对应 `*_provider.py` 中实现。
+`openai` 的 **图像** 接口仍为 stub；`doubao` 已支持字节/豆包 Seedream 兼容图片接口，需在设置页或 `.env` 中填写 API Key、Base URL 与模型 ID。
 
 ## Xais 中转站（xais.dchai.cn / sg2.dchai.cn）
 

@@ -57,12 +57,14 @@ def build_settings_tab() -> None:
     base = load_settings()
     cfg = load_gui_config()
 
-    def save_ui(api_key, provider, xais_mid, xais_base, shi_mid, shi_base, gem_mid):
+    def save_ui(api_key, provider, xais_mid, xais_base, doubao_mid, doubao_base, shi_mid, shi_base, gem_mid):
         data: dict[str, Any] = {
             "image_api_key": str(api_key or "").strip(),
             "image_provider": str(provider or "xais").strip().lower(),
             "xais_model_id": str(xais_mid or "").strip(),
             "xais_api_base": str(xais_base or "").strip(),
+            "doubao_model_id": str(doubao_mid or "").strip(),
+            "doubao_api_base": str(doubao_base or "").strip(),
             "shiyun_model_id": str(shi_mid or "").strip(),
             "shiyun_api_base": str(shi_base or "").strip(),
             "gemini_model_id": str(gem_mid or "").strip(),
@@ -145,6 +147,27 @@ def build_settings_tab() -> None:
         ref_models = gr.Button("从 Xais 拉取模型列表")
         model_status = gr.Markdown("")
 
+    with gr.Accordion("字节/豆包 Seedream 配置（IMAGE_PROVIDER=doubao）", open=False):
+        doubao_base_val = str(cfg.get("doubao_api_base", base.doubao_api_base) or "").strip() or "https://ark.cn-beijing.volces.com/api/v3"
+        doubao_api_base = gr.Textbox(
+            label="DOUBAO_API_BASE",
+            value=doubao_base_val,
+            info="火山方舟默认 https://ark.cn-beijing.volces.com/api/v3，也可填写兼容中转地址",
+        )
+        doubao_mid_val = str(cfg.get("doubao_model_id", base.doubao_model_id) or "").strip() or "doubao-seedream-5-0-260128"
+        doubao_model_id = gr.Dropdown(
+            label="DOUBAO_MODEL_ID",
+            choices=[
+                "doubao-seedream-5-0-260128",
+                "doubao-seedream-4-5-251128",
+                "doubao-seedream-4-0-250828",
+                doubao_mid_val,
+            ],
+            value=doubao_mid_val,
+            allow_custom_value=True,
+            info="填写你已开通的 Seedream 模型 ID；具体以火山方舟控制台为准",
+        )
+
     with gr.Accordion("诗云配置（IMAGE_PROVIDER=shiyun）", open=True):
         shi_base_val = str(cfg.get("shiyun_api_base", base.shiyun_api_base) or "").strip() or "https://shiyunapi.com"
         shiyun_api_base = gr.Textbox(
@@ -199,7 +222,7 @@ def build_settings_tab() -> None:
     ref_models.click(refresh_models, [api_key, api_base], [model_id, model_status])
     save_btn.click(
         save_ui,
-        [api_key, provider, model_id, api_base, shiyun_model_id, shiyun_api_base, gemini_model_id],
+        [api_key, provider, model_id, api_base, doubao_model_id, doubao_api_base, shiyun_model_id, shiyun_api_base, gemini_model_id],
         [save_msg],
     )
     exit_now_btn.click(_delayed_exit, inputs=None, outputs=None, js=_EXIT_PAGE_JS)

@@ -1,4 +1,4 @@
-# Type: multi — four-panel usage scenes (image {type_index} of {type_total})
+# Type: multi - center product with four surrounding usage scenes (image {type_index} of {type_total})
 
 **Product title (verbatim UTF-8; do not translate):** {product_title}
 
@@ -6,24 +6,25 @@
 {user_brief}
 
 ## Task
-Compose **one square image** as a **2×2 four-panel grid** showing **4 different real-world usage scenes** for this product. Use the title and references to pick plausible scenes for the product category.
+Create one square e-commerce composite image. Put the main product only once in the center, matching the product identity, color, shape, and material shown in the reference/main product image. Around it, create four corner scene panels that show realistic usage environments or lifestyle contexts for the product category.
 
-## Layout (mandatory default — 2×2 grid)
-- Divide the canvas into **exactly 4 equal panels**, edge to edge (optional 1–2% thin white gutter; panels stay clearly separate).
-- **Each panel = one visibly distinct usage scene** with **this product clearly shown in context**; identity matches references in every panel.
-- The 4 scenes must differ clearly (location / viewpoint / stage of use / indoor vs outdoor). No repeated scene.
+## Mandatory layout
+- Center: one clean hero product, similar to the main product image, clearly visible and dominant.
+- Four corners: four distinct real-world scenes or environments related to the product use case.
+- The four corner scenes must NOT contain the main product or any duplicated product instance.
+- The center product is the only product instance in the entire image.
+- Keep the layout visually balanced: center product separated from the surrounding scenes; scenes can be soft-edged panels, window-like crops, or corner vignettes.
 
-## Anti-clutter (critical — avoids "stacked / repetitive" quality penalty)
-- **NO center circle, oval, hero callout, or product overlaid in the middle.**
-- Product appears **only inside the 4 panels** — **at most 4 product instances total**, never a 5th in the center.
-- No "merged single background + central studio hero" legacy layout.
-
-## Alternative layout (only if the brief explicitly asks for center-hero)
-One circular product hero at the center (~35–50% width, white studio shot); the **4 corner panels show ONLY environment / usage context with NO product entity** in them. Default briefs do NOT use this — use the 2×2 grid.
+## Scene requirements
+- The four corner scenes should differ clearly by location, lighting, action stage, or viewpoint.
+- Scenes may show people, hands, furniture, surfaces, rooms, outdoor contexts, or other environment cues only when appropriate.
+- Do not insert the product into the scenes. The scenes are context references only.
 
 ## Style
-- Photorealistic, natural lighting per scene; cohesive color grading but distinguishable scenes.
-- No marketing text, price tags, badges, or arrows; recognizable faces not shown clearly (hands / silhouettes OK).
+- Photorealistic, premium Amazon/e-commerce image quality.
+- Natural lighting, coherent color grading, crisp center product, uncluttered composition.
+- No marketing text, price tags, badges, arrows, watermarks, logos, or readable brand claims.
+- Avoid recognizable faces; hands or silhouettes are acceptable.
 
 ## Negative
-center circle hero, center oval callout, center product overlay, fifth product instance, product duplicated in center and corners, merged single background with central hero, fewer than 4 panels, fewer than 4 distinct scenes, product missing from a panel, scenes unrelated to product category, stacked duplicate heroes, text overlays, watermark, faces, cartoon style, surreal environment, color drift, wrong product variant
+product in corner scenes, duplicated product, multiple product instances, product repeated four times, product shown inside panels, missing center product, center product altered, wrong product variant, four-panel grid where each panel contains product, lifestyle scene containing product, text overlays, badges, arrows, price tags, watermark, cartoon, illustration, surreal environment, cluttered layout, cropped center product, color drift

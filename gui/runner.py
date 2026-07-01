@@ -31,6 +31,9 @@ def effective_settings(gui_cfg: dict[str, Any] | None = None) -> Settings:
         xais_model_id=str(g.get("xais_model_id", "") or base.xais_model_id).strip(),
         xais_api_base=str(g.get("xais_api_base", "") or base.xais_api_base).strip(),
         xais_timeout=int(g.get("xais_timeout", base.xais_timeout)),
+        doubao_model_id=str(g.get("doubao_model_id", "") or base.doubao_model_id).strip(),
+        doubao_api_base=str(g.get("doubao_api_base", "") or base.doubao_api_base).strip(),
+        doubao_timeout=int(g.get("doubao_timeout", base.doubao_timeout)),
         shiyun_model_id=str(g.get("shiyun_model_id", "") or base.shiyun_model_id).strip(),
         shiyun_api_base=str(g.get("shiyun_api_base", "") or base.shiyun_api_base).strip(),
         shiyun_timeout=int(g.get("shiyun_timeout", base.shiyun_timeout)),
@@ -77,6 +80,7 @@ def run_generation(
     settings: Settings,
     progress_callback: object = None,
     custom_ref_paths: list[Path] | None = None,
+    type_ref_paths: dict[str, list[Path]] | None = None,
     custom_prompt: str | None = None,
     cancel_event: threading.Event | None = None,
 ) -> dict:
@@ -105,6 +109,7 @@ def run_generation(
         user_note=note,
         progress_callback=progress_callback,
         custom_ref_paths=custom_ref_paths,
+        type_ref_paths=type_ref_paths,
         custom_prompt=cp,
         cancel_event=cancel_event,
     )
@@ -152,11 +157,14 @@ def run_batch_generation(
 
 
 def gallery_images_from_meta(product_dir: Path) -> list[str]:
-    """Return sorted list of output PNG paths for gallery."""
+    """Return sorted list of output image paths for gallery."""
     out = product_dir / "output"
     if not out.is_dir():
         return []
-    paths = sorted(out.glob("*.png"), key=lambda p: p.name)
+    paths = sorted(
+        [p for p in out.iterdir() if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}],
+        key=lambda p: p.name,
+    )
     return [str(p.resolve()) for p in paths]
 
 
@@ -171,7 +179,7 @@ def compute_missing_slots(
     ``load_resolved_counts`` exactly the same way ``run_generation`` does)
     against what is actually OK on disk. A slot only counts as "done" when
     BOTH (a) ``meta["images"]`` reports ``status=ok`` for it AND (b) the
-    matching ``<type>_<NN>.png`` file truly exists. Failure-placeholder PNGs
+    matching ``<type>_<NN>.jpg`` or legacy ``.png`` file truly exists. Failure placeholders
     have ``status=error`` in meta so they correctly fall out as missing.
 
     Returns ``(missing_slot_labels, n_existing_ok, n_expected, was_cancelled)``
@@ -216,8 +224,9 @@ def compute_missing_slots(
                     continue
                 if not t_name or t_idx <= 0:
                     continue
-                fname = f"{t_name}_{t_idx:02d}.png"
-                if (product_dir / "output" / fname).is_file():
+                jpg_name = f"{t_name}_{t_idx:02d}.jpg"
+                png_name = f"{t_name}_{t_idx:02d}.png"
+                if (product_dir / "output" / jpg_name).is_file() or (product_dir / "output" / png_name).is_file():
                     existing_ok.add((t_name, t_idx))
 
     missing = [(t, i) for (t, i) in expected if (t, i) not in existing_ok]

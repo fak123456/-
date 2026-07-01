@@ -59,28 +59,33 @@ def read_image_pil(path: Path) -> Image.Image:
         return im.convert("RGB")
 
 
-def ensure_png_size(image_bytes: bytes, size: str) -> bytes:
-    """If size is native, re-encode as PNG without resizing; else cover-resize to WxH."""
+def ensure_jpg_size(image_bytes: bytes, size: str) -> bytes:
+    """If size is native, re-encode as JPG without resizing; else cover-resize to WxH."""
     if size.strip().lower() == "native":
         with Image.open(io.BytesIO(image_bytes)) as im:
             im = im.convert("RGB")
             buf = io.BytesIO()
-            im.save(buf, format="PNG")
+            im.save(buf, format="JPEG", quality=95, subsampling=0, optimize=True)
             return buf.getvalue()
     w, h = parse_size(size)
     with Image.open(io.BytesIO(image_bytes)) as im:
         im = im.convert("RGB")
         im = _cover_resize(im, w, h)
         buf = io.BytesIO()
-        im.save(buf, format="PNG")
+        im.save(buf, format="JPEG", quality=95, subsampling=0, optimize=True)
         return buf.getvalue()
 
 
-def save_png(image_bytes: bytes, dest: Path, size: str) -> None:
-    """Normalize to target size (or native) and write PNG."""
+def save_jpg(image_bytes: bytes, dest: Path, size: str) -> None:
+    """Normalize to target size (or native) and write high-quality JPG."""
     dest.parent.mkdir(parents=True, exist_ok=True)
-    normalized = ensure_png_size(image_bytes, size)
+    normalized = ensure_jpg_size(image_bytes, size)
     dest.write_bytes(normalized)
+
+
+def save_png(image_bytes: bytes, dest: Path, size: str) -> None:
+    """Backward-compatible alias; new output bytes are JPG."""
+    save_jpg(image_bytes, dest, size)
 
 
 def _cover_resize(im: Image.Image, target_w: int, target_h: int) -> Image.Image:
